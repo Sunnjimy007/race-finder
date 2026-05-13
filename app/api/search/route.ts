@@ -67,10 +67,8 @@ Every date must be strictly after ${todayStr}.`
       { role: 'user', content: userPrompt },
     ]
 
-    // web_search_20260209 includes dynamic filtering: Claude filters search
-    // results before they enter the context window, reducing input tokens.
     const tools = [
-      { type: 'web_search_20260209', name: 'web_search' },
+      { type: 'web_search_20250305', name: 'web_search' },
     ] as Parameters<typeof client.messages.create>[0]['tools']
 
     const createParams = {
