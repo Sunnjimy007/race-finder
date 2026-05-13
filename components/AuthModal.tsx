@@ -34,25 +34,29 @@ export default function AuthModal({ isOpen, onClose, onSuccess, prompt }: AuthMo
     setError(null)
     setInfo(null)
 
-    if (tab === 'signin') {
-      const err = await signIn(email, password)
-      if (err) {
-        setError(err)
+    try {
+      if (tab === 'signin') {
+        const err = await signIn(email, password)
+        if (err) {
+          setError(err)
+        } else {
+          onSuccess?.()
+          onClose()
+        }
       } else {
-        onSuccess?.()
-        onClose()
+        const { error: err, needsConfirmation } = await signUp(email, password)
+        if (err) {
+          setError(err)
+        } else if (needsConfirmation) {
+          setInfo('Check your email to confirm your account, then sign in.')
+          reset('signin')
+        } else {
+          onSuccess?.()
+          onClose()
+        }
       }
-    } else {
-      const { error: err, needsConfirmation } = await signUp(email, password)
-      if (err) {
-        setError(err)
-      } else if (needsConfirmation) {
-        setInfo('Check your email to confirm your account, then sign in.')
-        reset('signin')
-      } else {
-        onSuccess?.()
-        onClose()
-      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Check your connection and try again.')
     }
 
     setLoading(false)
