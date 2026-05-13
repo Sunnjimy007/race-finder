@@ -38,7 +38,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, prompt }: AuthMo
       if (tab === 'signin') {
         const err = await signIn(email, password)
         if (err) {
-          setError(err)
+          if (err.toLowerCase().includes('invalid login credentials')) {
+            setError("No account found with those details. Try Create Account, or check your password.")
+          } else if (err.toLowerCase().includes('email not confirmed')) {
+            setError("Please confirm your email first — check your inbox for a verification link.")
+          } else {
+            setError(err)
+          }
         } else {
           onSuccess?.()
           onClose()
@@ -46,9 +52,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess, prompt }: AuthMo
       } else {
         const { error: err, needsConfirmation } = await signUp(email, password)
         if (err) {
-          setError(err)
+          if (err.toLowerCase().includes('already registered')) {
+            setError("An account with this email already exists. Try signing in instead.")
+            reset('signin')
+          } else {
+            setError(err)
+          }
         } else if (needsConfirmation) {
-          setInfo('Check your email to confirm your account, then sign in.')
+          setInfo("Account created! Check your email for a confirmation link, then sign in.")
           reset('signin')
         } else {
           onSuccess?.()
@@ -56,7 +67,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, prompt }: AuthMo
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Check your connection and try again.')
+      setError(err instanceof Error ? err.message : 'Something went wrong — check your connection and try again.')
     }
 
     setLoading(false)
