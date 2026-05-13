@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { getSourcesForLocation } from '@/data/race-sources'
 
 export const maxDuration = 60
 
@@ -58,10 +59,16 @@ export async function POST(request: NextRequest) {
     else cutoff.setFullYear(today.getFullYear() + 1)
     const cutoffStr = cutoff.toISOString().split('T')[0]
 
+    // Build source hint for this location
+    const trustedSources = getSourcesForLocation(location)
+    const sourceHint = trustedSources.length > 0
+      ? `\n\nPrioritise these trusted sources first:\n${trustedSources.map(s => `- ${s.name}: ${s.url}`).join('\n')}`
+      : ''
+
     // Only dynamic content in the user message — keeps the cacheable prefix stable
     const userPrompt = `Search for ${distanceStr} races in ${location}.
 Today is ${todayStr}. Only include races between ${todayStr} and ${cutoffStr}.
-Every date must be strictly after ${todayStr}.`
+Every date must be strictly after ${todayStr}.${sourceHint}`
 
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: userPrompt },
