@@ -1,0 +1,17 @@
+{
+  "name": "RaceFinder",
+  "short_name": "RaceFinder",
+  "description": "Discover upcoming running races in Asia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#FF4500",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
