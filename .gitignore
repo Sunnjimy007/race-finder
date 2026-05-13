@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment variables — never commit real keys
+.env.local
+.env.local.txt
+.env*.local
+
+# Misc
+.DS_Store
+*.pem
+npm-debug.log*
+tsconfig.tsbuildinfo
