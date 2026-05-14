@@ -6,16 +6,23 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Generate a stable URL-safe ID for a race
+// Generate a stable URL-safe ID for a race — uses btoa for browser + server compatibility
 export function raceToId(race: Race): string {
-  return Buffer.from(`${race.name}|||${race.date}|||${race.location}`).toString('base64url')
+  const str = `${race.name}|||${race.date}|||${race.location}`
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+function decodeId(id: string): string {
+  const base64 = id.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+  return atob(padded)
 }
 
 // Decode an ID back to key fields and find the race in the cache
 export async function getRaceById(id: string): Promise<Race | null> {
   let name: string, date: string, location: string
   try {
-    const decoded = Buffer.from(id, 'base64url').toString('utf-8')
+    const decoded = decodeId(id)
     ;[name, date, location] = decoded.split('|||')
   } catch {
     return null
