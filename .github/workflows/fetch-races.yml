@@ -14,13 +14,25 @@ jobs:
       fail-fast: false   # Continue other locations even if one fails
 
     steps:
-      - name: Fetch races for ${{ matrix.location }}
+      - name: Fetch and cache races for ${{ matrix.location }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://racefinder.sanjiv-shah.com/api/cron/fetch-races?location=${{ matrix.location }}")
-          echo "HTTP status for ${{ matrix.location }}: $response"
-          if [ "$response" != "200" ]; then
-            echo "Failed for ${{ matrix.location }}"
+          echo "Fetching races for ${{ matrix.location }}..."
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"location\":\"${{ matrix.location }}\",\"distances\":[\"5K\",\"10K\",\"Half\",\"Full\",\"Ultra\",\"Fun Run\"],\"timeframe\":\"next 12 months\"}" \
+            --max-time 90 \
+            "https://racefinder.sanjiv-shah.com/api/search")
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "HTTP status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Failed for ${{ matrix.location }} with status $http_code"
             exit 1
           fi
+
+          count=$(echo "$body" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('races',[])))" 2>/dev/null || echo "unknown")
+          echo "Races returned: $count"

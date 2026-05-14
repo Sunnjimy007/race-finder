@@ -207,6 +207,25 @@ Every date must be strictly after ${todayStr}.${sourceHint}`
       return new Date(race.date + 'T00:00:00') >= todayMidnight
     })
 
+    // Write to cache when all distances are searched (comprehensive result).
+    // Fire-and-forget — don't block the user's response.
+    const ALL_DISTANCES = ['5K', '10K', 'Half', 'Full', 'Ultra', 'Fun Run']
+    const isComprehensive = ALL_DISTANCES.every(d => distances.includes(d))
+    if (isComprehensive && races.length > 0) {
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 8)
+      supabaseServer
+        .from('race_cache')
+        .upsert(
+          { cache_key: location.toLowerCase(), location, races, fetched_at: new Date().toISOString(), expires_at: expiresAt.toISOString() },
+          { onConflict: 'cache_key' }
+        )
+        .then(({ error }) => {
+          if (error) console.error('[search] Cache write error:', error.message)
+          else console.log(`[search] Cache updated for ${location}: ${races.length} races`)
+        })
+    }
+
     return NextResponse.json({ races })
   } catch (err) {
     console.error('Search route error:', err)
