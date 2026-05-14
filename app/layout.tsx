@@ -40,11 +40,12 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   manifest: '/manifest.json',
   openGraph: {
-    type: 'website',
-    title: 'RaceFinder — Discover Running Races in Asia',
-    description: 'Find upcoming running events in Singapore, Southeast Asia, and APAC. Search by distance, location, and timeframe. Powered by AI.',
+    title: 'RaceFinder — Find Your Next Race',
+    description: 'Discover running races near you in seconds.',
+    url: 'https://racefinder.sanjiv-shah.com',
     siteName: 'RaceFinder',
-    locale: 'en_SG',
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
