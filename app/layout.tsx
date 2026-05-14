@@ -19,8 +19,9 @@ const barlow = Barlow({
 })
 
 export const metadata: Metadata = {
-  title: 'RaceFinder — Discover Running Races in Asia',
-  description: 'Find upcoming running events in Singapore, Southeast Asia, and APAC. Search 5K, 10K, half marathon, marathon, and ultra races by location and date. Powered by AI.',
+  title: { default: 'RaceFinder', template: '%s | RaceFinder' },
+  description: 'Discover running races near you — 5K, 10K, half marathons and more. Find prices, early-bird windows and register in one place.',
+  metadataBase: new URL('https://racefinder.sanjiv-shah.com'),
   keywords: [
     'running races Singapore',
     'upcoming running events Singapore',
