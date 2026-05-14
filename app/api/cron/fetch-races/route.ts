@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@supabase/supabase-js'
 import { getSourcesForLocation } from '@/data/race-sources'
 import type { Race } from '@/types/race'
 
-// One location per invocation to stay within Vercel's 60s timeout.
-// The GitHub Action calls this endpoint separately for each location.
 export const maxDuration = 60
+
+const client = new Anthropic()
+
+// Use a fresh server-side Supabase client (not the browser singleton)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -19,16 +26,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'location query param required' }, { status: 400 })
   }
 
-  console.log(`[cron] Fetching races for ${location}`)
+  console.log(`[cron] Starting fetch for: ${location}`)
 
   try {
     const races = await fetchRacesFromAI(location)
-    console.log(`[cron] Got ${races.length} races for ${location}`)
+    console.log(`[cron] AI returned ${races.length} races for ${location}`)
+
+    if (races.length === 0) {
+      console.warn(`[cron] No races found for ${location} — skipping upsert`)
+      return NextResponse.json({ success: false, location, count: 0, reason: 'no races returned' })
+    }
 
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 8) // refresh weekly, expire in 8 days
+    expiresAt.setDate(expiresAt.getDate() + 8)
 
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('race_cache')
       .upsert(
         {
@@ -40,16 +52,18 @@ export async function GET(request: NextRequest) {
         },
         { onConflict: 'cache_key' }
       )
+      .select()
 
     if (error) {
-      console.error(`[cron] Supabase upsert error for ${location}:`, error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error(`[cron] Supabase error for ${location}:`, JSON.stringify(error))
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 })
     }
 
+    console.log(`[cron] Saved ${races.length} races for ${location}. Row:`, JSON.stringify(data))
     return NextResponse.json({ success: true, location, count: races.length })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error'
-    console.error(`[cron] Error for ${location}:`, msg)
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[cron] Exception for ${location}:`, msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
@@ -58,7 +72,7 @@ async function fetchRacesFromAI(location: string): Promise<Race[]> {
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
   const cutoff = new Date(today)
-  cutoff.setMonth(today.getMonth() + 12) // cache covers next 12 months
+  cutoff.setFullYear(today.getFullYear() + 1)
   const cutoffStr = cutoff.toISOString().split('T')[0]
 
   const trustedSources = getSourcesForLocation(location)
@@ -66,15 +80,15 @@ async function fetchRacesFromAI(location: string): Promise<Race[]> {
     ? `\n\nPrioritise these trusted sources first:\n${trustedSources.map(s => `- ${s.name}: ${s.url}`).join('\n')}`
     : ''
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const messages: any[] = [
+  const messages: Anthropic.MessageParam[] = [
     {
       role: 'user',
-      content: `Search for ALL upcoming running races in ${location} — all distances (5K, 10K, Half Marathon, Marathon, Ultra, Fun Run).
+      content: `Search for ALL upcoming running races (5K, 10K, Half Marathon, Marathon, Ultra, Fun Run) in ${location}.
 Today is ${todayStr}. Only include races between ${todayStr} and ${cutoffStr}.
 Every date must be strictly after ${todayStr}.${sourceHint}
 
-Return ONLY a valid JSON array. Start with [ and end with ]. Each object must have exactly these fields:
+Return ONLY a valid JSON array — no markdown, no code fences. Start with [ and end with ].
+Each object must have exactly these fields:
 {
   "name": "Full race name",
   "date": "YYYY-MM-DD",
@@ -91,57 +105,60 @@ Return 10-20 real races with real registration links, sorted by date ascending.`
     },
   ]
 
-  const tools = [{ type: 'web_search_20250305', name: 'web_search' }]
+  const tools = [
+    { type: 'web_search_20250305', name: 'web_search' },
+  ] as Parameters<typeof client.messages.create>[0]['tools']
 
-  // Raw fetch so we can loop on pause_turn without pulling in the full SDK
-  let response = await callAnthropic(messages, tools)
+  let response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 8192,
+    tools,
+    messages,
+  })
 
-  // Handle pause_turn — server-side search loop hit its iteration limit
+  console.log(`[cron] Initial response stop_reason: ${response.stop_reason}`)
+
   let continuations = 0
   while (response.stop_reason === 'pause_turn' && continuations < 2) {
     messages.push({ role: 'assistant', content: response.content })
-    response = await callAnthropic(messages, tools)
-    continuations++
-  }
-
-  const text: string = (response.content ?? [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((b: any) => b.type === 'text')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((b: any) => b.text ?? '')
-    .join('')
-
-  const arrayMatch = text.match(/\[[\s\S]*\]/)
-  if (!arrayMatch) return []
-
-  try {
-    const races = JSON.parse(arrayMatch[0])
-    if (!Array.isArray(races)) return []
-    // Strip past dates
-    const todayMidnight = new Date(todayStr + 'T00:00:00')
-    return races.filter(
-      (r: Race) => r.date && new Date(r.date + 'T00:00:00') >= todayMidnight
-    )
-  } catch {
-    return []
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callAnthropic(messages: any[], tools: any[]) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
+    response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       tools,
       messages,
-    }),
-  })
-  return res.json()
+    })
+    continuations++
+    console.log(`[cron] Continuation ${continuations} stop_reason: ${response.stop_reason}`)
+  }
+
+  const textBlock = response.content.find(
+    (b): b is Anthropic.TextBlock => b.type === 'text'
+  )
+
+  if (!textBlock) {
+    console.error('[cron] No text block in response. Content types:', response.content.map(b => b.type))
+    return []
+  }
+
+  console.log(`[cron] Text block preview: ${textBlock.text.slice(0, 200)}`)
+
+  let text = textBlock.text.trim()
+  text = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim()
+  const arrayMatch = text.match(/\[[\s\S]*\]/)
+  if (!arrayMatch) {
+    console.error('[cron] No JSON array found in response')
+    return []
+  }
+
+  try {
+    const races = JSON.parse(arrayMatch[0])
+    if (!Array.isArray(races)) return []
+    const todayMidnight = new Date(todayStr + 'T00:00:00')
+    return races.filter(
+      (r: Race) => r.date && new Date(r.date + 'T00:00:00') >= todayMidnight
+    )
+  } catch (e) {
+    console.error('[cron] JSON parse error:', e)
+    return []
+  }
 }
