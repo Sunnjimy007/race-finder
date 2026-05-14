@@ -68,8 +68,8 @@ async function fetchRacesFromAI(location: string, distances: string[]) {
 
   const data = await response.json()
   const text = data.content
-    .filter((b: any) => b.type === 'text')
-    .map((b: any) => b.text)
+  .filter((b: { type: string; text?: string }) => b.type === 'text')
+  .map((b: { type: string; text?: string }) => b.text ?? '')
     .join('')
 
   const match = text.match(/\[[\s\S]*\]/)
