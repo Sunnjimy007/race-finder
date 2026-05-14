@@ -49,8 +49,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RaceFinder — Discover Running Races in Asia',
-    description: 'Find upcoming running events in Singapore, Southeast Asia, and APAC. Powered by AI.',
+    title: 'RaceFinder — Find Your Next Race',
+    description: 'Discover running races near you in seconds.',
+    images: ['/og-image.png'],
   },
 }
 
