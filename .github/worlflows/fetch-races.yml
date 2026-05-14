@@ -1,0 +1,16 @@
+name: Weekly Race Cache Refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  fetch-races:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger race cache refresh
+        run: |
+          curl -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://racefinder.sanjiv-shah.com/api/cron/fetch-races
