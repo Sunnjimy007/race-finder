@@ -44,8 +44,22 @@ export default async function RacePage({ params }: Props) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: race.name,
+    startDate: race.date,
+    location: { '@type': 'Place', name: race.location },
+    offers: { '@type': 'Offer', price: race.price, url: race.registration_url },
+    description: race.description,
+  }
+
   return (
     <div className="px-4 pt-8 max-w-xl mx-auto">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="mb-4">
         <span className="bg-[#FF4500] text-white font-condensed font-bold text-sm uppercase tracking-wide px-3 py-1 rounded-full">
           {race.distance}
