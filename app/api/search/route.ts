@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@supabase/supabase-js'
 import { getSourcesForLocation } from '@/data/race-sources'
+import type { Race } from '@/types/race'
+
+// Map UI toggle names → API distance names stored in the cache
+const DIST_MAP: Record<string, string> = {
+  '5K': '5K', '10K': '10K', 'Half': 'Half Marathon',
+  'Full': 'Marathon', 'Ultra': 'Ultra', 'Fun Run': 'Fun Run',
+}
+
+// Server-side Supabase client (no user JWT needed for reading public cache)
+const supabaseServer = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export const maxDuration = 60
 
@@ -45,6 +59,39 @@ export async function POST(request: NextRequest) {
     if (!location?.trim()) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }
+
+    // ── Cache check ──────────────────────────────────────────────────────────
+    const { data: cached } = await supabaseServer
+      .from('race_cache')
+      .select('races, expires_at')
+      .eq('cache_key', location.toLowerCase())
+      .maybeSingle()
+
+    if (cached && new Date(cached.expires_at) > new Date()) {
+      // Map UI distance names to API names and filter
+      const apiDistances = distances.map((d: string) => DIST_MAP[d] ?? d)
+      const today = new Date().toISOString().split('T')[0]
+      const todayMidnight = new Date(today + 'T00:00:00')
+
+      const cutoff = new Date()
+      if (timeframe === 'next 3 months') cutoff.setMonth(cutoff.getMonth() + 3)
+      else if (timeframe === 'next 6 months') cutoff.setMonth(cutoff.getMonth() + 6)
+      else cutoff.setFullYear(cutoff.getFullYear() + 1)
+
+      const filtered = (cached.races as Race[]).filter(race => {
+        if (!race.date) return false
+        const raceDate = new Date(race.date + 'T00:00:00')
+        return (
+          raceDate >= todayMidnight &&
+          raceDate <= cutoff &&
+          (apiDistances.length === 0 || apiDistances.includes(race.distance))
+        )
+      })
+
+      console.log(`[search] Cache hit for ${location}: ${filtered.length} races`)
+      return NextResponse.json({ races: filtered, fromCache: true })
+    }
+    // ── End cache check ───────────────────────────────────────────────────────
 
     const distanceStr =
       Array.isArray(distances) && distances.length > 0

@@ -2,15 +2,25 @@ name: Weekly Race Cache Refresh
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
-  workflow_dispatch:
+    - cron: '0 6 * * 1'  # Every Monday at 6am UTC
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
 
 jobs:
   fetch-races:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        location: [Singapore, Australia]
+      fail-fast: false   # Continue other locations even if one fails
+
     steps:
-      - name: Trigger race cache refresh
+      - name: Fetch races for ${{ matrix.location }}
         run: |
-          curl -X GET \
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://racefinder.sanjiv-shah.com/api/cron/fetch-races
+            "https://racefinder.sanjiv-shah.com/api/cron/fetch-races?location=${{ matrix.location }}")
+          echo "HTTP status for ${{ matrix.location }}: $response"
+          if [ "$response" != "200" ]; then
+            echo "Failed for ${{ matrix.location }}"
+            exit 1
+          fi
