@@ -1,4 +1,6 @@
+import Link from 'next/link'
 import type { Race } from '@/types/race'
+import { raceToId } from '@/lib/getRaceById'
 
 function parseLocalDate(dateStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number)
@@ -93,9 +95,11 @@ export default function RaceCard({ race, isSaved = false, onToggleSave }: RaceCa
           </div>
 
           {/* Race name */}
-          <h2 className="font-condensed font-bold text-xl text-[#0F172A] dark:text-[#FFFFFC] leading-tight mb-1 truncate">
-            {race.name}
-          </h2>
+          <Link href={`/races/${raceToId(race)}`} className="group">
+            <h2 className="font-condensed font-bold text-xl text-[#0F172A] dark:text-[#FFFFFC] leading-tight mb-1 truncate group-hover:text-[#FF4500] transition-colors">
+              {race.name}
+            </h2>
+          </Link>
 
           {/* Location */}
           <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm mb-2.5 flex items-center gap-1.5">
