@@ -6,16 +6,20 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Generate a stable URL-safe ID for a race — uses btoa for browser + server compatibility
+// Generate a stable URL-safe ID — TextEncoder handles Unicode (Chinese, accents, etc.)
 export function raceToId(race: Race): string {
   const str = `${race.name}|||${race.date}|||${race.location}`
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  const bytes = new TextEncoder().encode(str)
+  const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
 function decodeId(id: string): string {
   const base64 = id.replace(/-/g, '+').replace(/_/g, '/')
   const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
-  return atob(padded)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.split('').map(c => c.charCodeAt(0)))
+  return new TextDecoder().decode(bytes)
 }
 
 // Decode an ID back to key fields and find the race in the cache
