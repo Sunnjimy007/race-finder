@@ -37,6 +37,9 @@ export const metadata: Metadata = {
     'fun run Singapore',
   ],
   authors: [{ name: 'RaceFinder' }],
+  alternates: {
+    canonical: 'https://racefinder.sanjiv-shah.com',
+  },
   robots: { index: true, follow: true },
   manifest: '/manifest.json',
   openGraph: {
