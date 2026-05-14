@@ -1,0 +1,195 @@
+# RoadRunner
+
+Product Requirements Document
+
+Version 1.0  |  April 2026  |  CONFIDENTIAL
+
+# **1. Executive Summary**
+
+RoadRunner is a mobile-first web application that solves a real problem for recreational runners: **there is no single trusted source to discover, compare, and track running events**. Today, runners bounce between a dozen fragmented websites to piece together race options — missing early-bird deadlines and relevant events in the process. RoadRunner fixes this.
+
+---
+
+RoadRunner aggregates running events from across the web into a clean, searchable interface. Users filter by location and distance, see real results in chronological order with pricing, early-bird windows, and direct registration links — all in one place. Built for recreational runners and designed to be shared publicly, RoadRunner will grow from a useful personal tool into a polished consumer product.
+
+# **2. Problem Statement**
+
+## **2.1 The Core Pain Point**
+
+There is no single source of truth for running events. Recreational runners must manually search across RunSignUp, Let's Do This, Race Roster, local running club sites, Facebook groups, and race-specific pages to find upcoming events. This is time-consuming, error-prone, and results in missed races and missed early-bird pricing.
+
+## **2.2 Pain Points in Detail**
+
+- Fragmentation: race listings are spread across 10+ platforms with no aggregation
+- Missing context: pricing and early-bird deadlines are rarely surfaced together
+- Poor mobile experience: most race sites are not mobile-optimised
+- Discovery failure: runners miss relevant local events they never knew existed
+- Decision fatigue: too much effort needed to compare events side by side
+
+# **3. Goals & Success Metrics**
+
+## **3.1 Product Goals**
+
+- Become the go-to discovery tool for recreational runners
+- Deliver accurate, real-time race data via AI-powered web search
+- Provide a mobile-first experience polished enough to share publicly
+- Reduce time to find and commit to a race from hours to under 2 minutes
+
+## **3.2 Success Metrics**
+
+| **Metric** | **Target (6 months)** | **Notes** |
+| --- | --- | --- |
+| Monthly Active Users | 5,000+ | Organic growth via sharing |
+| Search-to-Registration Click-Through | > 25% | User finds a race and clicks Register |
+| Session Length | > 3 minutes | Indicates genuine exploration |
+| Races Saved / Bookmarked | > 2 per session | Feature adoption signal |
+| Mobile Traffic Share | > 70% | Reflects mobile-first design priority |
+| NPS Score | > 45 | Benchmark for consumer product quality |
+
+# **4. Target User**
+
+## **4.1 Primary Persona: The Recreational Runner**
+
+| **Attribute** | **Description** |
+| --- | --- |
+| Who | Adults 25–55 who run recreationally — from parkrun regulars to first-time 10K entrants |
+| Motivation | Running for fitness, fun, community and personal challenge — not elite performance |
+| Behaviour | Runs 2–4x per week; uses races as motivation to train consistently |
+| Frustration | Wants to enter more races but finds discovering them too time-consuming |
+| Device | Primarily mobile (iOS/Android); discovers new apps via friends and social sharing |
+| Technical Comfort | Moderate; expects consumer-grade UX — not a developer tool |
+
+## **4.2 Secondary Persona: The Social Sharer**
+
+A subset of the primary persona who actively shares race discoveries with their running group, club, or social followers. This persona is the organic growth engine — their sharing behaviour drives acquisition, so the product must feel polished and credible enough to share without hesitation.
+
+# **5. Scope & Feature Prioritisation**
+
+## **5.1 MVP**
+
+Core value proposition:
+
+- Location + distance search with AI-powered real-time race discovery
+- Chronological results with name, date, distance, location, description
+- Price, early-bird deadline, and direct registration link per race
+- Clean, dark-mode UI with mobile-responsive layout
+
+## **5.2 Phase 2 — Priority Features**
+
+**5.2.1 Save & Bookmark Races**
+
+- Users can heart/bookmark any race from search results, use local storage for MVP, account -backed later
+- Saved races persist to a personal watchlist (local storage for MVP, account-backed later)
+- Watchlist accessible from a dedicated tab/page
+- Clear visual state: saved vs unsaved
+
+**5.2.2 Calendar Export**
+
+- One-tap export of any race to Google Calendar or Apple Calendar
+- Event includes: race name, date, location, distance, registration URL
+- ICS file generation for universal calendar compatibility
+- No account required — works client-side
+
+**5.2.3 Price Tracking & Alerts**
+
+- Users can set a price threshold or watch an early-bird deadline for a saved race
+- Push notification or email alert when: price changes, early-bird window opens/closes, race fills up
+- Requires account creation (email) for alert delivery
+- Alert management dashboard in user profile
+
+**5.2.4 Social Sharing**
+
+- Share any race card as a rich link (Open Graph metadata) to WhatsApp, iMessage, Instagram, Twitter/X
+- Shareable URL generates a pre-rendered race card for social preview
+- 'Share my watchlist' — share a curated list of saved races with a friend
+- Referral tracking: shared links attribute new sign-ups to sharer
+
+## **5.3 Phase 3 — Future Considerations**
+
+- User accounts with cross-device sync
+- Training plan integration (link a race to a Couch-to-5K or marathon plan)
+- Personalised recommendations based on race history
+- Race reviews and community ratings
+- Partnership / affiliate model with race organisers
+
+# **6. UX & Design Requirements**
+
+## **6.1 Mobile-First Mandate**
+
+Mobile is the primary target. Every feature must be designed, built and QA'd on mobile first. Desktop is an enhancement, not the baseline.
+
+---
+
+- Touch targets minimum 44px
+- Bottom-anchored navigation for thumb reachability
+- Race cards scannable at a glance — no horizontal scrolling
+- Search inputs optimised for mobile keyboards (location autocomplete)
+- Results load progressively — skeleton screens, no blank waits
+
+## **6.2 Design Principles**
+
+- **Results within 5 seconds of search submission** Speed first:
+- **Show the most useful fields prominently; hide detail behind expansion** Clarity over completeness:
+- **Always link to original source; show data freshness timestamp** Trust signals:
+- **Micro-animations, satisfying save interactions, bold visual language** Delight in the details:
+
+## **6.3 Accessibility**
+
+- WCAG 2.1 AA compliance minimum
+- Keyboard navigable, screen reader friendly
+- Colour contrast ratios met across dark and light themes
+
+# **7. Technical Requirements**
+
+## **7.1 Architecture**
+
+| **Layer** | **Approach** | **Rationale** |
+| --- | --- | --- |
+| Frontend | Single-page app (HTML/JS or React) | Fast, shareable, no install required |
+| AI Search | Anthropic Claude API with web_search tool | Real-time race discovery without maintaining a database |
+| Storage (Phase 2) | localStorage → Supabase or Firebase | Start simple, migrate as accounts are needed |
+| Notifications (Phase 2) | Resend (email) + Web Push API | Low-cost, no infra overhead initially |
+| Calendar Export | ICS file generation (client-side) | Universal compatibility, no server needed |
+| Hosting | Vercel  | Free tier sufficient at launch, scales automatically |
+
+## **7.2 Performance Targets**
+
+- Time to interactive (mobile, 4G): < 2 seconds
+- Search response time: < 8 seconds (AI web search latency)
+- Lighthouse mobile score: > 85
+- Core Web Vitals: all green
+
+## **7.3 Data & Privacy**
+
+- No personal data stored without explicit user consent
+- Race data is ephemeral — sourced live, not stored
+- GDPR-compliant consent flow before any account creation or email capture
+- Clear disclaimer that race data should be verified on official event websites
+
+# **8. Constraints & Risks**
+
+| **Risk** | **Likelihood** | **Impact** | **Mitigation** |
+| --- | --- | --- | --- |
+| AI search returns inaccurate race data | Medium | High | Prominent disclaimer; link to official source always shown |
+| Race registration URLs go stale | High | Medium | Encourage users to verify; date-stamp all results |
+| API cost at scale | Medium | Medium | Rate-limit searches; cache popular location+distance pairs |
+| Low mobile retention without accounts | Medium | High | Prioritise bookmarking with localStorage before requiring sign-up |
+| Competitors (RunSignUp, Let's Do This) | Low | Medium | Differentiate on UX simplicity and mobile-first design |
+
+# **9. Roadmap**
+
+| **Phase** | **Timeline** | **Key Deliverables** |
+| --- | --- | --- |
+| MVP | Complete | Search, results display, registration links |
+| Phase 2a | Month 1–2 | Save/bookmark races, calendar export (ICS) |
+| Phase 2b | Month 2–3 | Social sharing, rich link previews, shareable watchlists |
+| Phase 2c | Month 3–4 | User accounts (email), price alerts, early-bird notifications |
+| Phase 3 | Month 5+ | Recommendations, training plan integration, community features |
+
+# **10. Open Questions**
+
+1. Monetisation: will this remain free, use affiliate links with race organisers, or pursue a freemium model with premium alerts? Monetisation can come either through google ads, so provision for that. If there is enough traffic, then i can look to do affiliate links
+2. Race data accuracy SLA: what is the acceptable threshold for outdated or incorrect race information before it damages trust? The information has to be accurate, so look at reviews online, look at the dates carefully, the scanning needs to be at least 12months in advance. 
+3. Geographic scope at launch: global from day one, or specific regions first (e.g., Singapore, Australia, UK)? Lets go with SG first and then once the tool is established, then ill look to expand to other countries
+4. Brand name: is 'RoadRunner' the final name or a working title? Domain availability and social handles should be checked. For now, it will be the subdomain of sanjiv-shah.com. But if it is successful enough, then ill get a new domain.
+5. App vs web: should Phase 2 include a native app (React Native), or is PWA sufficient for the mobile-first audience? PWA is sufficient for the MVP and foreseeable future.
