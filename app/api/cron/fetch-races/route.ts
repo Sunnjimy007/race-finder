@@ -2,7 +2,6 @@ import { supabase } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  // Protect the endpoint
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,6 +31,8 @@ export async function GET(request: Request) {
         created_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString()
       }, { onConflict: 'cache_key' })
+
+    console.log('Supabase result for', search.location, ':', error ? error.message : 'success')
 
     if (error) {
       console.error(`Failed to cache ${search.location}:`, error)
@@ -68,8 +69,8 @@ async function fetchRacesFromAI(location: string, distances: string[]) {
 
   const data = await response.json()
   const text = data.content
-  .filter((b: { type: string; text?: string }) => b.type === 'text')
-  .map((b: { type: string; text?: string }) => b.text ?? '')
+    .filter((b: { type: string; text?: string }) => b.type === 'text')
+    .map((b: { type: string; text?: string }) => b.text ?? '')
     .join('')
 
   const match = text.match(/\[[\s\S]*\]/)
