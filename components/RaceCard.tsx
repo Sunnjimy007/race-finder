@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Race } from '@/types/race'
 import { raceToId } from '@/lib/getRaceById'
+import GoingButton from '@/components/GoingButton'
 
 function parseLocalDate(dateStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number)
@@ -139,6 +140,12 @@ export default function RaceCard({ race, isSaved = false, onToggleSave }: RaceCa
               Register →
             </a>
           </div>
+          {/* Going button */}
+          <GoingButton
+            raceId={raceToId(race)}
+            raceName={race.name}
+            raceDate={race.date}
+          />
         </div>
       </div>
     </article>
