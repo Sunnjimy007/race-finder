@@ -25,68 +25,82 @@ export async function GET(request: NextRequest) {
           height: '630px',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
-          backgroundColor: '#000000',
-          padding: '64px',
+          backgroundColor: '#0D0D0D',
           fontFamily: 'sans-serif',
+          overflow: 'hidden',
         }}
       >
-        {/* Top: branding */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: '#FF4500', fontSize: '28px', fontWeight: 900, letterSpacing: '-1px', textTransform: 'uppercase' }}>
-            Race
-          </span>
-          <span style={{ color: '#FFFFFC', fontSize: '28px', fontWeight: 900, letterSpacing: '-1px', textTransform: 'uppercase' }}>
-            Finder
-          </span>
-        </div>
+        {/* Orange accent bar at top */}
+        <div style={{ width: '100%', height: '8px', backgroundColor: '#FF4D00', display: 'flex' }} />
 
-        {/* Middle: race name */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Distance pill */}
-          {distance && (
-            <div
-              style={{
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '56px 64px 56px 64px' }}>
+          {/* Branding */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              backgroundColor: '#FF4D00',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: 'white', fontSize: '22px', fontWeight: 900 }}>R</span>
+            </div>
+            <span style={{ color: '#FFFFFF', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.5px' }}>
+              RaceFinder
+            </span>
+          </div>
+
+          {/* Main content */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Distance pill */}
+            {distance && (
+              <div style={{
                 display: 'flex',
                 width: 'fit-content',
-                backgroundColor: '#FF4500',
+                backgroundColor: '#FF4D00',
                 color: 'white',
-                fontSize: '20px',
+                fontSize: '18px',
                 fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '2px',
-                padding: '8px 20px',
+                letterSpacing: '3px',
+                padding: '8px 22px',
                 borderRadius: '999px',
-              }}
-            >
-              {distance}
-            </div>
-          )}
-          <div style={{ color: '#FFFFFC', fontSize: '64px', fontWeight: 900, lineHeight: 1.1, letterSpacing: '-2px' }}>
-            {name.length > 50 ? name.slice(0, 47) + '…' : name}
-          </div>
-        </div>
+              }}>
+                {distance}
+              </div>
+            )}
 
-        {/* Bottom: details row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          {dateFormatted && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: '#FF4500', fontSize: '22px' }}>📅</span>
-              <span style={{ color: '#7A8EA6', fontSize: '22px' }}>{dateFormatted}</span>
+            {/* Race name */}
+            <div style={{
+              color: '#FFFFFF',
+              fontSize: name.length > 40 ? '56px' : '68px',
+              fontWeight: 900,
+              lineHeight: 1.05,
+              letterSpacing: '-2px',
+            }}>
+              {name.length > 55 ? name.slice(0, 52) + '…' : name}
             </div>
-          )}
-          {location && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: '#FF4500', fontSize: '22px' }}>📍</span>
-              <span style={{ color: '#7A8EA6', fontSize: '22px' }}>{location}</span>
-            </div>
-          )}
-          {price && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: '#FF4500', fontSize: '22px' }}>💰</span>
-              <span style={{ color: '#7A8EA6', fontSize: '22px' }}>{price}</span>
-            </div>
-          )}
+          </div>
+
+          {/* Bottom details row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+            {dateFormatted && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '4px', height: '20px', backgroundColor: '#FF4D00', borderRadius: '2px', display: 'flex' }} />
+                <span style={{ color: '#9BA3AF', fontSize: '20px', fontWeight: 500 }}>{dateFormatted}</span>
+              </div>
+            )}
+            {location && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '4px', height: '20px', backgroundColor: '#FF4D00', borderRadius: '2px', display: 'flex' }} />
+                <span style={{ color: '#9BA3AF', fontSize: '20px', fontWeight: 500 }}>{location}</span>
+              </div>
+            )}
+            {price && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '4px', height: '20px', backgroundColor: '#FF4D00', borderRadius: '2px', display: 'flex' }} />
+                <span style={{ color: '#FFFFFF', fontSize: '20px', fontWeight: 700 }}>{price}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     ),

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import NotificationBell from '@/components/NotificationBell'
 
 function SearchIcon({ className }: { className?: string }) {
   return (
@@ -57,6 +58,8 @@ export default function BottomNav() {
             </Link>
           )
         })}
+        {/* 4th tab: friend notifications bell */}
+        <NotificationBell />
       </div>
     </nav>
   )

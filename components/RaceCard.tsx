@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Race } from '@/types/race'
 import { raceToId } from '@/lib/getRaceById'
+import { toSlug } from '@/lib/raceSlug'
 import GoingButton from '@/components/GoingButton'
 
 function parseLocalDate(dateStr: string): Date {
@@ -117,34 +118,41 @@ export default function RaceCard({ race, isSaved = false, onToggleSave }: RaceCa
           </p>
 
           {/* Footer: price + register */}
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <span className="font-condensed font-bold text-xl text-[#0F172A] dark:text-[#FFFFFC] block">
-                {race.price}
-              </span>
-              {race.early_bird_deadline && (
-                <span className={`text-xs block mt-0.5 ${earlyBird ? 'text-[#00C96B]' : 'text-[#64748B] dark:text-[#7A8EA6]'}`}>
-                  {earlyBird
-                    ? `Early bird until ${formatShortDate(race.early_bird_deadline)}`
-                    : `Early bird ended ${formatShortDate(race.early_bird_deadline)}`}
+          <div className="flex items-end justify-between gap-3 mb-4">
+            {!race.price?.toLowerCase().includes('unknown') && (
+              <div className="min-w-0">
+                <span className="text-[10px] font-condensed uppercase tracking-wider text-[#64748B] dark:text-[#7A8EA6] block">
+                  from
                 </span>
-              )}
-            </div>
+                <span className="font-condensed font-bold text-xl text-[#0F172A] dark:text-[#FFFFFC] block leading-tight">
+                  {race.price}
+                </span>
+                {race.early_bird_deadline && (
+                  <span className={`text-xs block mt-0.5 ${earlyBird ? 'text-[#00C96B]' : 'text-[#64748B] dark:text-[#7A8EA6]'}`}>
+                    {earlyBird
+                      ? `Early bird until ${formatShortDate(race.early_bird_deadline)}`
+                      : `Early bird ended ${formatShortDate(race.early_bird_deadline)}`}
+                  </span>
+                )}
+              </div>
+            )}
 
             <a
               href={race.registration_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 bg-[#FF4500] text-white px-4 py-2.5 rounded-lg font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#FF7F11] active:bg-[#e64000] transition-colors min-h-[44px] flex items-center whitespace-nowrap"
+              className="flex-shrink-0 ml-auto bg-[#FF4500] text-white px-4 py-2.5 rounded-lg font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#FF7F11] active:bg-[#e64000] transition-colors min-h-[44px] flex items-center whitespace-nowrap"
             >
               Register →
             </a>
           </div>
-          {/* Going button */}
+          {/* Going button — share icon lives on the same row */}
           <GoingButton
             raceId={raceToId(race)}
             raceName={race.name}
             raceDate={race.date}
+            raceLocation={race.location}
+            shareUrl={`https://racefinder.sanjiv-shah.com/race/${toSlug(race.name, race.date)}`}
           />
         </div>
       </div>

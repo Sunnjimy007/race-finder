@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import AuthModal from '@/components/AuthModal'
 import Toast from '@/components/Toast'
+import ShareButton from '@/components/ShareButton'
 
 interface Avatar { letter: string; colour: string }
 interface GoingState { count: number; isGoing: boolean; avatars: Avatar[] }
@@ -12,9 +13,11 @@ interface GoingButtonProps {
   raceId: string
   raceName: string
   raceDate: string
+  raceLocation?: string
+  shareUrl?: string
 }
 
-export default function GoingButton({ raceId, raceName, raceDate }: GoingButtonProps) {
+export default function GoingButton({ raceId, raceName, raceDate, raceLocation, shareUrl }: GoingButtonProps) {
   const [state, setState] = useState<GoingState>({ count: 0, isGoing: false, avatars: [] })
   const [loading, setLoading] = useState(true)
   const [pulse, setPulse] = useState(false)
@@ -58,7 +61,7 @@ export default function GoingButton({ raceId, raceName, raceDate }: GoingButtonP
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ raceId, raceName, raceDate }),
+      body: JSON.stringify({ raceId, raceName, raceDate, raceLocation: raceLocation ?? '' }),
     })
 
     if (res.ok) {
@@ -73,9 +76,10 @@ export default function GoingButton({ raceId, raceName, raceDate }: GoingButtonP
   if (loading) return <div className="h-9" /> // reserve space while loading
 
   return (
-    <div className="relative flex items-center justify-between gap-3 pt-3 border-t border-[#E2E8F0] dark:border-[#1D3A58]">
-      {/* Avatar stack + count */}
+    <div className="relative flex items-center justify-between gap-3 pt-4 border-t border-[#E2E8F0] dark:border-[#1D3A58]">
+      {/* Left: share button (if provided) + avatar stack + count */}
       <div className="flex items-center gap-2 min-w-0">
+        {shareUrl && <ShareButton url={shareUrl} raceName={raceName} />}
         {state.avatars.length > 0 && (
           <div className="flex -space-x-2 flex-shrink-0">
             {state.avatars.map((a, i) => (

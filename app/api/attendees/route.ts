@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { notifyFollowers } from '@/lib/notifyFollowers'
+import { toSlug } from '@/lib/raceSlug'
 
-// Service role bypasses RLS — server-side only, never exposed to client
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Derive a consistent avatar letter + colour from a user_id UUID
 function avatarFromUserId(userId: string) {
   const clean = userId.replace(/-/g, '')
   const letter = clean[0]?.toUpperCase() ?? '?'
@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
   const raceId = request.nextUrl.searchParams.get('raceId')
   if (!raceId) return NextResponse.json({ error: 'raceId required' }, { status: 400 })
 
-  // Resolve current user (optional — read-only endpoint)
   let currentUserId: string | null = null
   const auth = request.headers.get('authorization')
   if (auth?.startsWith('Bearer ')) {
@@ -41,10 +40,30 @@ export async function GET(request: NextRequest) {
   const isGoing = currentUserId ? data.some(r => r.user_id === currentUserId) : false
   const avatars = data.slice(0, 3).map(r => avatarFromUserId(r.user_id))
 
-  return NextResponse.json({ count, isGoing, avatars })
+  // When authenticated, also return per-attendee data with follow status
+  let attendees: { userId: string; letter: string; colour: string; isFollowing: boolean }[] | undefined
+  if (currentUserId) {
+    const attendeeIds = data.map(r => r.user_id).filter(id => id !== currentUserId)
+    const { data: myFollows } = await admin
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUserId)
+      .in('following_id', attendeeIds.length ? attendeeIds : ['none'])
+
+    const followingSet = new Set((myFollows ?? []).map(f => f.following_id))
+    attendees = data
+      .filter(r => r.user_id !== currentUserId)
+      .map(r => ({
+        userId: r.user_id,
+        ...avatarFromUserId(r.user_id),
+        isFollowing: followingSet.has(r.user_id),
+      }))
+  }
+
+  return NextResponse.json({ count, isGoing, avatars, attendees })
 }
 
-// POST /api/attendees  { raceId, raceName, raceDate }  — toggles going status
+// POST /api/attendees  { raceId, raceName, raceDate, raceLocation? }  — toggles going status
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization')
   if (!auth?.startsWith('Bearer ')) {
@@ -54,9 +73,8 @@ export async function POST(request: NextRequest) {
   const { data: { user }, error: authErr } = await admin.auth.getUser(auth.slice(7))
   if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { raceId, raceName, raceDate } = await request.json()
+  const { raceId, raceName, raceDate, raceLocation } = await request.json()
 
-  // Check existing row
   const { data: existing } = await admin
     .from('race_attendees')
     .select('id')
@@ -75,9 +93,21 @@ export async function POST(request: NextRequest) {
       race_date: raceDate,
       status: 'going',
     })
+
+    // Fire-and-forget: notify followers when newly going
+    if (user.email) {
+      notifyFollowers({
+        actorId: user.id,
+        actorEmail: user.email,
+        raceName,
+        raceId,
+        raceSlug: toSlug(raceName, raceDate),
+        raceDate,
+        raceLocation: raceLocation ?? '',
+      }).catch(console.error)
+    }
   }
 
-  // Return fresh state
   const { data: all } = await admin
     .from('race_attendees')
     .select('user_id')
