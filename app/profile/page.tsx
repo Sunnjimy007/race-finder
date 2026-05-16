@@ -63,13 +63,6 @@ export default function ProfilePage() {
 
   useEffect(() => { loadStravaData() }, [loadStravaData])
 
-  // Auto-sync once on first connect (when callback redirects back)
-  useEffect(() => {
-    if (stravaStatus === 'connected' && user) {
-      handleSync()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stravaStatus, user])
 
   async function handleConnectStrava() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -92,17 +85,21 @@ export default function ProfilePage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     setSyncing(true)
-    const res = await fetch('/api/strava/sync', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-    if (res.ok) {
-      // Reload cached stats from Supabase
-      const { data: fresh } = await supabase
-        .from('strava_stats').select('*').eq('user_id', user!.id).maybeSingle()
-      setStats(fresh)
+    try {
+      const res = await fetch('/api/strava/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (res.ok) {
+        const { data: fresh } = await supabase
+          .from('strava_stats').select('*').eq('user_id', user!.id).maybeSingle()
+        setStats(fresh)
+      }
+    } catch (e) {
+      console.error('Strava sync failed:', e)
+    } finally {
+      setSyncing(false)
     }
-    setSyncing(false)
   }
 
   function formatSynced(iso: string | null) {
@@ -181,32 +178,32 @@ export default function ProfilePage() {
           ) : strava ? (
             <div>
               {/* Athlete row */}
-              <div className="flex items-center justify-between gap-4 mb-5">
-                <div className="flex items-center gap-3">
-                  {strava.athlete_avatar && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={strava.athlete_avatar} alt={strava.athlete_name} className="w-10 h-10 rounded-full object-cover" />
-                  )}
-                  <div>
-                    <p className="text-sm font-semibold text-[#0F172A] dark:text-[#FFFFFC]">{strava.athlete_name}</p>
-                    <p className="text-xs text-[#00C96B]">Connected</p>
-                  </div>
+              <div className="flex items-center gap-3 mb-4">
+                {strava.athlete_avatar && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={strava.athlete_avatar} alt={strava.athlete_name} className="w-10 h-10 rounded-full object-cover" />
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-[#0F172A] dark:text-[#FFFFFC]">{strava.athlete_name}</p>
+                  <p className="text-xs text-[#00C96B]">Connected</p>
                 </div>
-                <button
-                  onClick={handleSync}
-                  disabled={syncing}
-                  className="inline-flex items-center gap-1.5 text-xs font-condensed font-bold uppercase tracking-wide border border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] hover:border-[#FC4C02] hover:text-[#FC4C02] px-3 py-1.5 rounded-lg transition-all disabled:opacity-40"
-                >
-                  {syncing ? (
-                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                  {syncing ? 'Syncing…' : 'Sync'}
-                </button>
               </div>
+
+              {/* Sync button — always visible and prominent */}
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="w-full flex items-center justify-center gap-2 bg-[#FC4C02] text-white py-3 rounded-xl font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#e64500] active:bg-[#cc3d00] transition-colors disabled:opacity-50 mb-4"
+              >
+                {syncing ? (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+                {syncing ? 'Syncing…' : 'Sync Strava Data'}
+              </button>
 
               {/* Stats grid */}
               {stats ? (
@@ -240,19 +237,9 @@ export default function ProfilePage() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-3">
-                  <p className="text-sm text-[#64748B] dark:text-[#7A8EA6] mb-3">No data yet — sync to load your Strava stats.</p>
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className="inline-flex items-center gap-2 bg-[#FC4C02] text-white px-5 py-2.5 rounded-xl font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#e64500] transition-colors disabled:opacity-40"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    {syncing ? 'Syncing…' : 'Sync Strava Data'}
-                  </button>
-                </div>
+                <p className="text-sm text-[#64748B] dark:text-[#7A8EA6] text-center py-2">
+                  No data yet — tap Sync above to load your stats.
+                </p>
               )}
             </div>
           ) : (
