@@ -97,7 +97,7 @@ export default function RaceCard({ race, isSaved = false, onToggleSave }: RaceCa
           </div>
 
           {/* Race name */}
-          <Link href={`/races/${raceToId(race)}`} className="group">
+          <Link href={`/race/${toSlug(race.name, race.date)}`} className="group">
             <h2 className="font-condensed font-bold text-xl text-[#0F172A] dark:text-[#FFFFFC] leading-tight mb-1 truncate group-hover:text-[#FF4500] transition-colors">
               {race.name}
             </h2>
