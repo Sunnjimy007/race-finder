@@ -33,6 +33,7 @@ export default function FriendsPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
   const [following, setFollowing] = useState<FollowEntry[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
@@ -99,7 +100,7 @@ export default function FriendsPage() {
     if (res.ok) {
       const data = await res.json()
       setProfile(data)
-      // Refresh people list now that we have a profile
+      setProfileSaved(true)
       fetchPeople()
     }
     setSavingProfile(false)
@@ -197,8 +198,18 @@ export default function FriendsPage() {
         </p>
       </div>
 
-      {/* Profile name setup */}
-      {!profileLoading && !profile?.first_name && (
+      {/* Profile name — show setup banner if no name set yet, show success if just saved */}
+      {!profileLoading && profileSaved && (
+        <div className="bg-[#00C96B]/10 border border-[#00C96B]/30 rounded-xl px-4 py-3 mb-6 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#00C96B] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <p className="text-sm text-[#00C96B] font-medium">
+            You&apos;re now discoverable as <strong>{firstName}{lastName ? ` ${lastName[0]}.` : ''}</strong>
+          </p>
+        </div>
+      )}
+      {!profileLoading && !profileSaved && !profile?.first_name && (
         <div className="bg-[#FF4500]/5 dark:bg-[#FF4500]/10 border border-[#FF4500]/20 rounded-xl p-4 mb-6">
           <p className="font-condensed font-bold text-sm uppercase tracking-wide text-[#FF4500] mb-1">Set your display name</p>
           <p className="text-xs text-[#64748B] dark:text-[#7A8EA6] mb-3">So friends can recognise you. Shows as &quot;First L.&quot;</p>
@@ -372,6 +383,71 @@ export default function FriendsPage() {
           )}
         </div>
       )}
+
+      {/* ── Account settings ── */}
+      <div className="mt-8 pt-6 border-t border-[#E2E8F0] dark:border-[#1D3A58]">
+        <p className="text-[#64748B] dark:text-[#7A8EA6] text-xs uppercase tracking-widest font-condensed font-semibold mb-3">
+          Your Settings
+        </p>
+        <div className="space-y-2">
+          {/* Display name edit (if already set) */}
+          {profile?.first_name && (
+            <div className="bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-xl px-4 py-3">
+              <p className="text-xs text-[#64748B] dark:text-[#7A8EA6] mb-2 uppercase tracking-wider font-condensed font-semibold">Display name</p>
+              <form onSubmit={saveProfile} className="flex gap-2">
+                <input
+                  value={firstName}
+                  onChange={e => setFirstName(e.target.value)}
+                  placeholder="First name"
+                  required
+                  className="flex-1 bg-[#F1F5F9] dark:bg-[#0A1929] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-lg px-3 py-2 text-sm text-[#0F172A] dark:text-[#FFFFFC] focus:outline-none focus:border-[#FF4500] transition-colors"
+                />
+                <input
+                  value={lastName}
+                  onChange={e => setLastName(e.target.value)}
+                  placeholder="Last name"
+                  className="flex-1 bg-[#F1F5F9] dark:bg-[#0A1929] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-lg px-3 py-2 text-sm text-[#0F172A] dark:text-[#FFFFFC] focus:outline-none focus:border-[#FF4500] transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="bg-[#FF4500] text-white px-4 py-2 rounded-lg font-condensed font-bold text-xs uppercase tracking-wide hover:bg-[#FF7F11] transition-colors disabled:opacity-40 whitespace-nowrap"
+                >
+                  {savingProfile ? '…' : profileSaved ? 'Saved ✓' : 'Update'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Links to other settings */}
+          {[
+            { href: '/profile', label: 'Strava Integration', desc: 'Connect your Strava account', icon: <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" /> },
+            { href: '/account', label: 'Notification Preferences', desc: 'Email and in-app alerts', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /> },
+            { href: '/alerts', label: 'Race Alerts', desc: 'Get emailed when new races match your criteria', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /> },
+          ].map(({ href, label, desc, icon }) => (
+            <a
+              key={href}
+              href={href}
+              className="bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F8FAFC] dark:hover:bg-[#0A1929] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-[#FF4500]" fill={label === 'Strava Integration' ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke={label === 'Strava Integration' ? 'none' : 'currentColor'} strokeWidth={2}>
+                    {icon}
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#0F172A] dark:text-[#FFFFFC]">{label}</p>
+                  <p className="text-xs text-[#64748B] dark:text-[#7A8EA6]">{desc}</p>
+                </div>
+              </div>
+              <svg className="w-4 h-4 text-[#CBD5E1] dark:text-[#1D3A58] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

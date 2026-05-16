@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 
 interface NotificationPayload {
   actor_name?: string
@@ -31,17 +32,19 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NotificationBell() {
+  const { user } = useAuth()
+  const authed = !!user
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [authed, setAuthed] = useState(false)
   const [actioning, setActioning] = useState<Set<string>>(new Set())
 
+  // Fetch unread count whenever auth state becomes known
   useEffect(() => {
+    if (!authed) return
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
-      setAuthed(true)
       const res = await fetch('/api/notifications', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
@@ -50,7 +53,7 @@ export default function NotificationBell() {
         setUnreadCount(data.unreadCount)
       }
     })
-  }, [])
+  }, [authed])
 
   async function handleOpen() {
     if (open) { setOpen(false); return }
