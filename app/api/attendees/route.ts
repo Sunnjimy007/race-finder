@@ -40,24 +40,41 @@ export async function GET(request: NextRequest) {
   const isGoing = currentUserId ? data.some(r => r.user_id === currentUserId) : false
   const avatars = data.slice(0, 3).map(r => avatarFromUserId(r.user_id))
 
-  // When authenticated, also return per-attendee data with follow status
-  let attendees: { userId: string; letter: string; colour: string; isFollowing: boolean }[] | undefined
+  // When authenticated, return per-attendee data with follow status and display name
+  let attendees: { userId: string; letter: string; colour: string; isFollowing: boolean; isPending: boolean; displayName: string }[] | undefined
   if (currentUserId) {
     const attendeeIds = data.map(r => r.user_id).filter(id => id !== currentUserId)
-    const { data: myFollows } = await admin
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', currentUserId)
-      .in('following_id', attendeeIds.length ? attendeeIds : ['none'])
+    const [{ data: myFollows }, { data: profiles }] = await Promise.all([
+      admin.from('follows')
+        .select('following_id, status')
+        .eq('follower_id', currentUserId)
+        .in('following_id', attendeeIds.length ? attendeeIds : ['none']),
+      admin.from('user_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', attendeeIds.length ? attendeeIds : ['none']),
+    ])
 
-    const followingSet = new Set((myFollows ?? []).map(f => f.following_id))
+    const followMap = new Map((myFollows ?? []).map(f => [f.following_id, f.status]))
+    const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]))
+
     attendees = data
       .filter(r => r.user_id !== currentUserId)
-      .map(r => ({
-        userId: r.user_id,
-        ...avatarFromUserId(r.user_id),
-        isFollowing: followingSet.has(r.user_id),
-      }))
+      .map(r => {
+        const profile = profileMap.get(r.user_id)
+        const { letter, colour } = avatarFromUserId(r.user_id)
+        const avatarLetter = profile?.first_name?.[0]?.toUpperCase() ?? letter
+        const displayName = profile?.first_name
+          ? (profile.last_name?.[0] ? `${profile.first_name} ${profile.last_name[0]}.` : profile.first_name)
+          : null
+        return {
+          userId: r.user_id,
+          letter: avatarLetter,
+          colour,
+          isFollowing: followMap.get(r.user_id) === 'accepted',
+          isPending: followMap.get(r.user_id) === 'pending',
+          displayName: displayName ?? `Runner ${r.user_id.slice(0, 4)}`,
+        }
+      })
   }
 
   return NextResponse.json({ count, isGoing, avatars, attendees })

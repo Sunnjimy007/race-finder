@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabase'
 
 interface Attendee {
   userId: string
+  displayName: string
   letter: string
   colour: string
   isFollowing: boolean
+  isPending: boolean
 }
 
 interface AttendeesListProps {
@@ -18,7 +20,7 @@ export default function AttendeesList({ raceId }: AttendeesListProps) {
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
   const [authed, setAuthed] = useState(false)
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [actioning, setActioning] = useState<Set<string>>(new Set())
 
   const fetchAttendees = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -36,27 +38,31 @@ export default function AttendeesList({ raceId }: AttendeesListProps) {
 
   useEffect(() => { fetchAttendees() }, [fetchAttendees])
 
-  async function handleFollow(userId: string, currentlyFollowing: boolean) {
+  async function handleFollow(attendee: Attendee) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    setPendingIds(prev => new Set(prev).add(userId))
+    setActioning(prev => new Set(prev).add(attendee.userId))
 
-    // Optimistic update
-    setAttendees(prev =>
-      prev.map(a => a.userId === userId ? { ...a, isFollowing: !currentlyFollowing } : a)
-    )
+    if (attendee.isFollowing) {
+      // Unfollow
+      setAttendees(prev => prev.map(a => a.userId === attendee.userId ? { ...a, isFollowing: false } : a))
+      await fetch('/api/follows', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ followingId: attendee.userId }),
+      })
+    } else {
+      // Send follow request (optimistic: show pending)
+      setAttendees(prev => prev.map(a => a.userId === attendee.userId ? { ...a, isPending: true } : a))
+      await fetch('/api/follows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ followingId: attendee.userId }),
+      })
+    }
 
-    await fetch('/api/follows', {
-      method: currentlyFollowing ? 'DELETE' : 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ followingId: userId }),
-    })
-
-    setPendingIds(prev => { const s = new Set(prev); s.delete(userId); return s })
+    setActioning(prev => { const s = new Set(prev); s.delete(attendee.userId); return s })
   }
 
   if (loading || attendees.length === 0) return null
@@ -66,35 +72,41 @@ export default function AttendeesList({ raceId }: AttendeesListProps) {
       <p className="text-xs text-[#64748B] dark:text-[#7A8EA6] uppercase tracking-widest font-condensed font-semibold mb-3">
         Who&apos;s Going
       </p>
-      <div className="space-y-2">
-        {attendees.slice(0, 6).map(a => (
-          <div key={a.userId} className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{ backgroundColor: a.colour }}
-              >
-                {a.letter}
+      <div className="space-y-2.5">
+        {attendees.slice(0, 6).map(a => {
+          const isActioning = actioning.has(a.userId)
+          const btnLabel = a.isFollowing ? 'Following' : a.isPending ? 'Requested' : 'Follow'
+          const btnClass = a.isFollowing
+            ? 'border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] hover:border-red-400 hover:text-red-500'
+            : a.isPending
+              ? 'border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] cursor-default'
+              : 'border-[#FF4500]/40 text-[#FF4500] hover:bg-[#FF4500] hover:text-white'
+
+          return (
+            <div key={a.userId} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ backgroundColor: a.colour }}
+                >
+                  {a.letter}
+                </div>
+                <span className="text-sm text-[#0F172A] dark:text-[#FFFFFC] font-medium truncate">
+                  {a.displayName}
+                </span>
               </div>
-              <span className="text-sm text-[#64748B] dark:text-[#7A8EA6] font-mono">
-                {a.userId.slice(0, 8)}…
-              </span>
+              {authed && (
+                <button
+                  onClick={() => !a.isPending && handleFollow(a)}
+                  disabled={isActioning || a.isPending}
+                  className={`flex-shrink-0 text-xs font-condensed font-bold uppercase tracking-wide px-3 py-1.5 rounded-lg border transition-all disabled:opacity-50 ${btnClass}`}
+                >
+                  {btnLabel}
+                </button>
+              )}
             </div>
-            {authed && (
-              <button
-                onClick={() => handleFollow(a.userId, a.isFollowing)}
-                disabled={pendingIds.has(a.userId)}
-                className={`text-xs font-condensed font-bold uppercase tracking-wide px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 ${
-                  a.isFollowing
-                    ? 'border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] hover:border-red-400 hover:text-red-500'
-                    : 'border-[#FF4500]/40 text-[#FF4500] hover:bg-[#FF4500] hover:text-white'
-                }`}
-              >
-                {a.isFollowing ? 'Following' : 'Follow'}
-              </button>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

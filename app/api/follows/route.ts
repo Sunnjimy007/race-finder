@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { formatDisplayName } from '@/lib/displayName'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,29 +14,40 @@ async function getAuthedUser(request: NextRequest) {
   return user ?? null
 }
 
-// GET /api/follows — current user's following list + follower count
+// GET /api/follows — current user's following list (with status) + follower count
 export async function GET(request: NextRequest) {
   const user = await getAuthedUser(request)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [{ data: following }, { count: followerCount }] = await Promise.all([
-    admin.from('follows').select('following_id, created_at').eq('follower_id', user.id),
-    admin.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
+    admin.from('follows')
+      .select('id, following_id, status, created_at')
+      .eq('follower_id', user.id)
+      .order('created_at', { ascending: false }),
+    admin.from('follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('following_id', user.id)
+      .eq('status', 'accepted'),
   ])
 
-  // Enrich following list with display names (email prefix)
+  // Enrich with display names
   const enriched = await Promise.all(
     (following ?? []).map(async (f) => {
-      const { data } = await admin.auth.admin.getUserById(f.following_id)
-      const name = data.user?.email?.split('@')[0] ?? f.following_id.slice(0, 8)
-      return { ...f, name }
+      const [{ data: profile }, { data: authData }] = await Promise.all([
+        admin.from('user_profiles').select('first_name, last_name').eq('user_id', f.following_id).maybeSingle(),
+        admin.auth.admin.getUserById(f.following_id),
+      ])
+      return {
+        ...f,
+        name: formatDisplayName(profile, authData.user?.email),
+      }
     })
   )
 
   return NextResponse.json({ following: enriched, followerCount: followerCount ?? 0 })
 }
 
-// POST /api/follows  { followingId }
+// POST /api/follows  { followingId } — sends a follow REQUEST (pending)
 export async function POST(request: NextRequest) {
   const user = await getAuthedUser(request)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,19 +57,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid followingId' }, { status: 400 })
   }
 
-  const { error } = await admin.from('follows').insert({
-    follower_id: user.id,
-    following_id: followingId,
+  // Check if already following / request already sent
+  const { data: existing } = await admin
+    .from('follows')
+    .select('id, status')
+    .eq('follower_id', user.id)
+    .eq('following_id', followingId)
+    .maybeSingle()
+
+  if (existing) {
+    return NextResponse.json({ ok: true, status: existing.status })
+  }
+
+  // Get requester's display name
+  const [{ data: profile }, { data: authData }] = await Promise.all([
+    admin.from('user_profiles').select('first_name, last_name').eq('user_id', user.id).maybeSingle(),
+    admin.auth.admin.getUserById(user.id),
+  ])
+  const actorName = formatDisplayName(profile, authData.user?.email)
+
+  // Create pending follow
+  const { data: follow, error } = await admin
+    .from('follows')
+    .insert({ follower_id: user.id, following_id: followingId, status: 'pending' })
+    .select('id')
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notify the target user
+  await admin.from('notifications').insert({
+    user_id: followingId,
+    type: 'follow_request',
+    payload: {
+      actor_id: user.id,
+      actor_name: actorName,
+      follow_id: follow.id,
+    },
   })
 
-  // 23505 = unique violation (already following — treat as success)
-  if (error && error.code !== '23505') {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, status: 'pending' })
 }
 
-// DELETE /api/follows  { followingId }
+// DELETE /api/follows  { followingId } — unfollow or cancel request
 export async function DELETE(request: NextRequest) {
   const user = await getAuthedUser(request)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

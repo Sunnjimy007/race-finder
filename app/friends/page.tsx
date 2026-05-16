@@ -5,64 +5,172 @@ import { supabase } from '@/lib/supabase'
 import AuthModal from '@/components/AuthModal'
 import { useAuth } from '@/context/AuthContext'
 
-interface FollowEntry {
-  following_id: string
-  name: string
-  created_at: string
+type Tab = 'requests' | 'following' | 'discover'
+type FollowStatus = 'none' | 'following' | 'pending_outgoing' | 'pending_incoming'
+
+interface Person {
+  userId: string
+  displayName: string
+  followStatus: FollowStatus
+  followId?: string
 }
+
+interface FollowEntry {
+  id: string
+  following_id: string
+  status: string
+  name: string
+}
+
+interface Profile { first_name: string; last_name: string }
 
 export default function FriendsPage() {
   const { user } = useAuth()
   const [authOpen, setAuthOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('discover')
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
   const [following, setFollowing] = useState<FollowEntry[]>([])
-  const [followerCount, setFollowerCount] = useState(0)
+  const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(false)
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
-  const fetchFollows = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
+  const getSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setLoading(false); return }
+    return session
+  }
 
-    const res = await fetch('/api/follows', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
+  const fetchProfile = useCallback(async () => {
+    const session = await getSession()
+    if (!session) { setProfileLoading(false); return }
+    const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${session.access_token}` } })
+    if (res.ok) {
+      const data = await res.json()
+      setProfile(data)
+      setFirstName(data.first_name ?? '')
+      setLastName(data.last_name ?? '')
+    }
+    setProfileLoading(false)
+  }, [])
+
+  const fetchFollowing = useCallback(async () => {
+    const session = await getSession()
+    if (!session) return
+    const res = await fetch('/api/follows', { headers: { Authorization: `Bearer ${session.access_token}` } })
     if (res.ok) {
       const data = await res.json()
       setFollowing(data.following ?? [])
-      setFollowerCount(data.followerCount ?? 0)
+    }
+  }, [])
+
+  const fetchPeople = useCallback(async () => {
+    const session = await getSession()
+    if (!session) return
+    setLoading(true)
+    const res = await fetch('/api/people', { headers: { Authorization: `Bearer ${session.access_token}` } })
+    if (res.ok) {
+      const data = await res.json()
+      setPeople(data.people ?? [])
     }
     setLoading(false)
-  }, [user])
+  }, [])
 
-  useEffect(() => { fetchFollows() }, [fetchFollows])
+  useEffect(() => {
+    if (user) {
+      fetchProfile()
+      fetchFollowing()
+      fetchPeople()
+    }
+  }, [user, fetchProfile, fetchFollowing, fetchPeople])
 
-  async function handleUnfollow(followingId: string) {
-    const { data: { session } } = await supabase.auth.getSession()
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault()
+    const session = await getSession()
     if (!session) return
-
-    setPendingIds(prev => new Set(prev).add(followingId))
-    setFollowing(prev => prev.filter(f => f.following_id !== followingId))
-
-    await fetch('/api/follows', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ followingId }),
+    setSavingProfile(true)
+    const res = await fetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ first_name: firstName, last_name: lastName }),
     })
-
-    setPendingIds(prev => { const s = new Set(prev); s.delete(followingId); return s })
+    if (res.ok) {
+      const data = await res.json()
+      setProfile(data)
+      // Refresh people list now that we have a profile
+      fetchPeople()
+    }
+    setSavingProfile(false)
   }
+
+  async function handleFollow(userId: string, currentStatus: FollowStatus) {
+    const session = await getSession()
+    if (!session) return
+    setPendingIds(prev => new Set(prev).add(userId))
+
+    if (currentStatus === 'following' || currentStatus === 'pending_outgoing') {
+      // Unfollow or cancel request
+      await fetch('/api/follows', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ followingId: userId }),
+      })
+      setPeople(prev => prev.map(p => p.userId === userId ? { ...p, followStatus: 'none' as FollowStatus, followId: undefined } : p))
+      setFollowing(prev => prev.filter(f => f.following_id !== userId))
+    } else if (currentStatus === 'none') {
+      // Send follow request
+      await fetch('/api/follows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ followingId: userId }),
+      })
+      setPeople(prev => prev.map(p => p.userId === userId ? { ...p, followStatus: 'pending_outgoing' as FollowStatus } : p))
+    }
+
+    setPendingIds(prev => { const s = new Set(prev); s.delete(userId); return s })
+  }
+
+  async function handleAccept(followId: string, actorId: string) {
+    const session = await getSession()
+    if (!session) return
+    setPendingIds(prev => new Set(prev).add(followId))
+
+    const res = await fetch(`/api/follows/${followId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'accept' }),
+    })
+    if (res.ok) {
+      // Refresh both lists
+      await Promise.all([fetchFollowing(), fetchPeople()])
+      if (tab === 'requests') setTab('following')
+    }
+    setPendingIds(prev => { const s = new Set(prev); s.delete(followId); return s })
+  }
+
+  async function handleDecline(followId: string) {
+    const session = await getSession()
+    if (!session) return
+    await fetch(`/api/follows/${followId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'decline' }),
+    })
+    setPeople(prev => prev.map(p => p.followId === followId ? { ...p, followStatus: 'none' as FollowStatus, followId: undefined } : p))
+  }
+
+  const incoming = people.filter(p => p.followStatus === 'pending_incoming')
+  const acceptedFollowing = following.filter(f => f.status === 'accepted')
+  const pendingFollowing = following.filter(f => f.status === 'pending')
+  const discover = people.filter(p => p.followStatus === 'none')
 
   if (!user) {
     return (
       <div className="px-4 pt-8">
         <h1 className="font-condensed text-4xl font-bold uppercase text-[#0F172A] dark:text-[#FFFFFC] mb-1">Friends</h1>
         <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm mb-12">See when friends sign up for races</p>
-
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-20 h-20 bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-full flex items-center justify-center mb-6">
             <svg className="w-9 h-9 text-[#CBD5E1] dark:text-[#1D3A58]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -70,17 +178,11 @@ export default function FriendsPage() {
             </svg>
           </div>
           <p className="font-condensed text-xl font-semibold text-[#0F172A] dark:text-[#FFFFFC] mb-2">Sign in to follow friends</p>
-          <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm max-w-xs leading-relaxed mb-6">
-            Get notified when your friends sign up for a race.
-          </p>
-          <button
-            onClick={() => setAuthOpen(true)}
-            className="bg-[#FF4500] text-white px-8 py-3 rounded-xl font-condensed font-bold text-base uppercase tracking-wide hover:bg-[#FF7F11] transition-colors"
-          >
+          <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm max-w-xs leading-relaxed mb-6">Get notified when your friends sign up for a race.</p>
+          <button onClick={() => setAuthOpen(true)} className="bg-[#FF4500] text-white px-8 py-3 rounded-xl font-condensed font-bold text-base uppercase tracking-wide hover:bg-[#FF7F11] transition-colors">
             Sign In / Create Account
           </button>
         </div>
-
         <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
       </div>
     )
@@ -88,65 +190,225 @@ export default function FriendsPage() {
 
   return (
     <div className="px-4 pt-8 pb-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="font-condensed text-4xl font-bold uppercase text-[#0F172A] dark:text-[#FFFFFC] mb-1">Friends</h1>
         <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm">
-          {following.length > 0 ? `Following ${following.length}` : 'Not following anyone yet'}
-          {followerCount > 0 ? ` · ${followerCount} follower${followerCount !== 1 ? 's' : ''}` : ''}
+          {acceptedFollowing.length > 0 ? `Following ${acceptedFollowing.length}` : 'Find your running crew'}
         </p>
       </div>
 
-      {/* How to follow tip */}
-      <div className="bg-[#FF4500]/5 dark:bg-[#FF4500]/10 border border-[#FF4500]/20 rounded-xl px-4 py-3 mb-6 flex gap-3 items-start">
-        <svg className="w-4 h-4 text-[#FF4500] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="text-xs text-[#0F172A]/70 dark:text-[#FFFFFC]/70 leading-relaxed">
-          Open any race, scroll to <strong>Who&apos;s Going</strong>, and tap <strong>Follow</strong> next to a runner to get notified when they sign up for future races.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-[#FF4500] border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : following.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <p className="font-condensed text-lg font-semibold text-[#0F172A] dark:text-[#FFFFFC] mb-2">No one followed yet</p>
-          <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm max-w-xs leading-relaxed">
-            Once you follow someone from a race page, they&apos;ll appear here.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-[#64748B] dark:text-[#7A8EA6] text-xs uppercase tracking-widest font-condensed font-semibold">Following</p>
-          {following.map(f => {
-            const initial = f.name?.[0]?.toUpperCase() ?? '?'
-            return (
-              <div
-                key={f.following_id}
-                className="bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-xl p-4 flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-[#FF4500]/10 dark:bg-[#FF4500]/15 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[#FF4500] font-bold text-base">{initial}</span>
-                  </div>
-                  <span className="text-sm text-[#0F172A] dark:text-[#FFFFFC] font-medium truncate">
-                    {f.name}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleUnfollow(f.following_id)}
-                  disabled={pendingIds.has(f.following_id)}
-                  className="flex-shrink-0 text-xs font-condensed font-bold uppercase tracking-wide text-[#64748B] dark:text-[#7A8EA6] hover:text-red-500 border border-[#CBD5E1] dark:border-[#1D3A58] hover:border-red-400 px-3 py-1.5 rounded-lg transition-all disabled:opacity-40"
-                >
-                  Unfollow
-                </button>
-              </div>
-            )
-          })}
+      {/* Profile name setup */}
+      {!profileLoading && !profile?.first_name && (
+        <div className="bg-[#FF4500]/5 dark:bg-[#FF4500]/10 border border-[#FF4500]/20 rounded-xl p-4 mb-6">
+          <p className="font-condensed font-bold text-sm uppercase tracking-wide text-[#FF4500] mb-1">Set your display name</p>
+          <p className="text-xs text-[#64748B] dark:text-[#7A8EA6] mb-3">So friends can recognise you. Shows as &quot;First L.&quot;</p>
+          <form onSubmit={saveProfile} className="flex gap-2">
+            <input
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              placeholder="First name"
+              required
+              className="flex-1 bg-white dark:bg-[#0A1929] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-lg px-3 py-2 text-sm text-[#0F172A] dark:text-[#FFFFFC] placeholder-[#94A3B8] focus:outline-none focus:border-[#FF4500] transition-colors"
+            />
+            <input
+              value={lastName}
+              onChange={e => setLastName(e.target.value)}
+              placeholder="Last name"
+              className="flex-1 bg-white dark:bg-[#0A1929] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-lg px-3 py-2 text-sm text-[#0F172A] dark:text-[#FFFFFC] placeholder-[#94A3B8] focus:outline-none focus:border-[#FF4500] transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="bg-[#FF4500] text-white px-4 py-2 rounded-lg font-condensed font-bold text-xs uppercase tracking-wide hover:bg-[#FF7F11] transition-colors disabled:opacity-40 whitespace-nowrap"
+            >
+              {savingProfile ? '…' : 'Save'}
+            </button>
+          </form>
         </div>
       )}
+
+      {/* Tabs */}
+      <div className="flex rounded-xl bg-[#F1F5F9] dark:bg-[#000000] p-1 mb-6 gap-1">
+        {([
+          { key: 'requests', label: incoming.length > 0 ? `Requests (${incoming.length})` : 'Requests' },
+          { key: 'following', label: 'Following' },
+          { key: 'discover', label: 'Discover' },
+        ] as { key: Tab; label: string }[]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 py-2 px-1 rounded-lg font-condensed font-semibold text-xs uppercase tracking-wide transition-all ${
+              tab === key
+                ? 'bg-white dark:bg-[#12263A] text-[#0F172A] dark:text-[#FFFFFC] shadow-sm'
+                : 'text-[#64748B] dark:text-[#7A8EA6]'
+            } ${key === 'requests' && incoming.length > 0 ? 'text-[#FF4500]' : ''}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Requests tab ── */}
+      {tab === 'requests' && (
+        <div>
+          {incoming.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="font-condensed text-lg font-semibold text-[#0F172A] dark:text-[#FFFFFC] mb-2">No pending requests</p>
+              <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm">When someone wants to follow you, you&apos;ll see them here.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {incoming.map(p => (
+                <div key={p.userId} className="bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-11 h-11 rounded-full bg-[#FF4500]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[#FF4500] font-bold text-lg">{p.displayName[0]?.toUpperCase()}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-[#0F172A] dark:text-[#FFFFFC]">{p.displayName}</p>
+                      <p className="text-xs text-[#64748B] dark:text-[#7A8EA6]">wants to follow you</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => p.followId && handleAccept(p.followId, p.userId)}
+                      disabled={pendingIds.has(p.followId ?? '')}
+                      className="flex-1 bg-[#FF4500] text-white py-2.5 rounded-xl font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#FF7F11] transition-colors disabled:opacity-40"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => p.followId && handleDecline(p.followId)}
+                      disabled={pendingIds.has(p.followId ?? '')}
+                      className="flex-1 border border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] py-2.5 rounded-xl font-condensed font-bold text-sm uppercase tracking-wide hover:border-red-400 hover:text-red-500 transition-colors disabled:opacity-40"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Following tab ── */}
+      {tab === 'following' && (
+        <div>
+          {acceptedFollowing.length === 0 && pendingFollowing.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="font-condensed text-lg font-semibold text-[#0F172A] dark:text-[#FFFFFC] mb-2">Not following anyone yet</p>
+              <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm mb-4">
+                Head to Discover to find friends to follow.
+              </p>
+              <button onClick={() => setTab('discover')} className="text-[#FF4500] font-condensed font-bold text-sm uppercase">
+                Discover people →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingFollowing.length > 0 && (
+                <>
+                  <p className="text-[#64748B] dark:text-[#7A8EA6] text-xs uppercase tracking-widest font-condensed font-semibold">Pending</p>
+                  {pendingFollowing.map(f => (
+                    <PersonRow
+                      key={f.id}
+                      name={f.name}
+                      status="pending_outgoing"
+                      disabled={pendingIds.has(f.following_id)}
+                      onAction={() => handleFollow(f.following_id, 'pending_outgoing')}
+                    />
+                  ))}
+                  <p className="text-[#64748B] dark:text-[#7A8EA6] text-xs uppercase tracking-widest font-condensed font-semibold pt-2">Following</p>
+                </>
+              )}
+              {acceptedFollowing.map(f => (
+                <PersonRow
+                  key={f.id}
+                  name={f.name}
+                  status="following"
+                  disabled={pendingIds.has(f.following_id)}
+                  onAction={() => handleFollow(f.following_id, 'following')}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Discover tab ── */}
+      {tab === 'discover' && (
+        <div>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-8 h-8 border-2 border-[#FF4500] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : discover.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="font-condensed text-lg font-semibold text-[#0F172A] dark:text-[#FFFFFC] mb-2">
+                {people.length === 0 ? 'No other runners yet' : 'You\'re following everyone!'}
+              </p>
+              <p className="text-[#64748B] dark:text-[#7A8EA6] text-sm max-w-xs mx-auto leading-relaxed">
+                {people.length === 0
+                  ? 'As more runners join RaceFinder and set their display name, they\'ll appear here.'
+                  : 'Check the Following tab to see your crew.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[#64748B] dark:text-[#7A8EA6] text-xs uppercase tracking-widest font-condensed font-semibold">
+                {discover.length} runner{discover.length !== 1 ? 's' : ''} on RaceFinder
+              </p>
+              {discover.map(p => (
+                <PersonRow
+                  key={p.userId}
+                  name={p.displayName}
+                  status={p.followStatus}
+                  disabled={pendingIds.has(p.userId)}
+                  onAction={() => handleFollow(p.userId, p.followStatus)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PersonRow({
+  name,
+  status,
+  disabled,
+  onAction,
+}: {
+  name: string
+  status: FollowStatus
+  disabled: boolean
+  onAction: () => void
+}) {
+  const btnLabel = status === 'following' ? 'Following' : status === 'pending_outgoing' ? 'Requested' : 'Follow'
+  const btnClass = status === 'following'
+    ? 'border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6] hover:border-red-400 hover:text-red-500'
+    : status === 'pending_outgoing'
+      ? 'border-[#CBD5E1] dark:border-[#1D3A58] text-[#64748B] dark:text-[#7A8EA6]'
+      : 'border-[#FF4500]/40 text-[#FF4500] hover:bg-[#FF4500] hover:text-white'
+
+  return (
+    <div className="bg-white dark:bg-[#12263A] border border-[#CBD5E1] dark:border-[#1D3A58] rounded-xl p-4 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-10 h-10 rounded-full bg-[#FF4500]/10 dark:bg-[#FF4500]/15 flex items-center justify-center flex-shrink-0">
+          <span className="text-[#FF4500] font-bold text-base">{name[0]?.toUpperCase()}</span>
+        </div>
+        <span className="text-sm font-medium text-[#0F172A] dark:text-[#FFFFFC] truncate">{name}</span>
+      </div>
+      <button
+        onClick={onAction}
+        disabled={disabled || status === 'pending_outgoing'}
+        className={`flex-shrink-0 text-xs font-condensed font-bold uppercase tracking-wide px-4 py-2 rounded-lg border transition-all disabled:opacity-40 ${btnClass}`}
+      >
+        {btnLabel}
+      </button>
     </div>
   )
 }

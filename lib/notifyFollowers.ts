@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { formatDisplayName } from '@/lib/displayName'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +27,9 @@ export async function notifyFollowers({
   raceDate,
   raceLocation,
 }: NotifyParams) {
-  const actorName = actorEmail.split('@')[0]
+  const { data: actorProfile } = await admin
+    .from('user_profiles').select('first_name, last_name').eq('user_id', actorId).maybeSingle()
+  const actorName = formatDisplayName(actorProfile, actorEmail)
 
   const { data: follows } = await admin
     .from('follows')
