@@ -42,6 +42,7 @@ export default function ProfilePage() {
   const [stats, setStats] = useState<StravaStats | null>(null)
   const [loadingStrava, setLoadingStrava] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [stravaStatus, setStravaStatus] = useState<'connected' | 'error' | null>(null)
 
   useEffect(() => {
@@ -85,17 +86,22 @@ export default function ProfilePage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     setSyncing(true)
+    setSyncError(null)
     try {
       const res = await fetch('/api/strava/sync', {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
+      const body = await res.json()
       if (res.ok) {
         const { data: fresh } = await supabase
           .from('strava_stats').select('*').eq('user_id', user!.id).maybeSingle()
         setStats(fresh)
+      } else {
+        setSyncError(body.error ?? 'Sync failed — please try again.')
       }
     } catch (e) {
+      setSyncError('Network error — check your connection and try again.')
       console.error('Strava sync failed:', e)
     } finally {
       setSyncing(false)
@@ -204,6 +210,10 @@ export default function ProfilePage() {
                 )}
                 {syncing ? 'Syncing…' : 'Sync Strava Data'}
               </button>
+
+              {syncError && (
+                <p className="text-xs text-red-500 mb-3 leading-relaxed">{syncError}</p>
+              )}
 
               {/* Stats grid */}
               {stats ? (

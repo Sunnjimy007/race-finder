@@ -26,15 +26,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Strava not connected' }, { status: 400 })
   }
 
+  // Fetch from Strava
   const [activities, stravaStats] = await Promise.all([
     getAthleteActivities(user.id, 50),
     getAthleteStats(user.id, tokenRow.athlete_id),
   ])
 
+  if (!activities.length && !stravaStats) {
+    return NextResponse.json(
+      { error: 'Could not reach Strava — token may have expired. Try disconnecting and reconnecting.' },
+      { status: 502 }
+    )
+  }
+
   const insights = parseActivities(activities)
   const ytdDistanceKm = (stravaStats?.ytd_run_totals?.distance ?? 0) / 1000
 
-  await admin.from('strava_stats').upsert({
+  const { error: upsertError } = await admin.from('strava_stats').upsert({
     user_id: user.id,
     weekly_km_avg: insights?.weeklyKmAvg ?? 0,
     longest_run_km: insights?.longestRunKm ?? 0,
@@ -46,6 +54,14 @@ export async function POST(request: NextRequest) {
     ytd_distance_km: Math.round(ytdDistanceKm * 10) / 10,
     last_synced: new Date().toISOString(),
   }, { onConflict: 'user_id' })
+
+  if (upsertError) {
+    console.error('strava_stats upsert failed:', upsertError)
+    return NextResponse.json(
+      { error: `Database error: ${upsertError.message}` },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ ok: true, insights, ytdDistanceKm })
 }

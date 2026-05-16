@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import NotificationBell from '@/components/NotificationBell'
 
 function SearchIcon({ className }: { className?: string }) {
   return (
@@ -57,10 +56,7 @@ export default function BottomNav() {
             </Link>
           )
         })}
-        {/* 3rd tab: friend notifications bell */}
-        <NotificationBell />
-
-        {/* 4th tab: profile (rightmost) */}
+        {/* 3rd tab: profile (rightmost) */}
         <Link
           href="/profile"
           className={`flex-1 flex flex-col items-center gap-1 pt-3 pb-4 min-h-[60px] transition-colors ${
