@@ -97,7 +97,14 @@ export interface StravaInsights {
   recentPace: string | null  // min/km of last 5 runs average e.g. "5:30"
 }
 
-export function parseActivities(activities: any[]): StravaInsights | null {
+interface StravaActivity {
+  distance: number        // metres
+  moving_time: number     // seconds
+  start_date: string      // ISO string
+  location_city?: string | null
+}
+
+export function parseActivities(activities: StravaActivity[]): StravaInsights | null {
   if (!activities?.length) return null
 
   const now = Date.now()
@@ -143,7 +150,7 @@ export function parseActivities(activities: any[]): StravaInsights | null {
   else if (weeklyKmAvg >= 20 || longestRunKm >= 15) estimatedLevel = 'Intermediate'
 
   // Most frequent city
-  const cities = activities.map(a => a.location_city).filter(Boolean)
+  const cities = activities.map(a => a.location_city).filter((c): c is string => !!c)
   const cityCount: Record<string, number> = {}
   cities.forEach(c => { cityCount[c] = (cityCount[c] || 0) + 1 })
   const homeLocation =

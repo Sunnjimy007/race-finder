@@ -133,7 +133,7 @@ export default function FriendsPage() {
     setPendingIds(prev => { const s = new Set(prev); s.delete(userId); return s })
   }
 
-  async function handleAccept(followId: string, actorId: string) {
+  async function handleAccept(followId: string) {
     const session = await getSession()
     if (!session) return
     setPendingIds(prev => new Set(prev).add(followId))
@@ -282,7 +282,7 @@ export default function FriendsPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => p.followId && handleAccept(p.followId, p.userId)}
+                      onClick={() => p.followId && handleAccept(p.followId)}
                       disabled={pendingIds.has(p.followId ?? '')}
                       className="flex-1 bg-[#FF4500] text-white py-2.5 rounded-xl font-condensed font-bold text-sm uppercase tracking-wide hover:bg-[#FF7F11] transition-colors disabled:opacity-40"
                     >
