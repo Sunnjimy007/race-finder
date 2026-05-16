@@ -32,7 +32,6 @@ function ProfileIcon({ className, filled }: { className?: string; filled?: boole
 const NAV_ITEMS = [
   { href: '/', label: 'Search', Icon: SearchIcon },
   { href: '/saved', label: 'Saved', Icon: HeartIcon },
-  { href: '/profile', label: 'Profile', Icon: ProfileIcon },
 ]
 
 export default function BottomNav() {
@@ -58,8 +57,19 @@ export default function BottomNav() {
             </Link>
           )
         })}
-        {/* 4th tab: friend notifications bell */}
+        {/* 3rd tab: friend notifications bell */}
         <NotificationBell />
+
+        {/* 4th tab: profile (rightmost) */}
+        <Link
+          href="/profile"
+          className={`flex-1 flex flex-col items-center gap-1 pt-3 pb-4 min-h-[60px] transition-colors ${
+            pathname === '/profile' ? 'text-[#FF4500]' : 'text-[#64748B] dark:text-[#7A8EA6] hover:text-[#0F172A] dark:hover:text-[#FFFFFC]'
+          }`}
+        >
+          <ProfileIcon className="w-5 h-5" filled={pathname === '/profile'} />
+          <span className="font-condensed text-[10px] font-semibold uppercase tracking-widest">Profile</span>
+        </Link>
       </div>
     </nav>
   )
